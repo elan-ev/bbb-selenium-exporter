@@ -1,6 +1,9 @@
 # python files
 __pycache__
 .direnv
+/build
+/dist
+*.egg-info
 
 # weird stuff happening on macos
 ._*
