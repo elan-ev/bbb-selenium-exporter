@@ -1,0 +1,7 @@
+# python files
+__pycache__
+.direnv
+
+# weird stuff happening on macos
+._*
+.DS_Store
