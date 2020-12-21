@@ -8,7 +8,7 @@ setuptools.setup(
     version="0.0.1",
     author="Markus Otto",
     author_email="markus.otto@infra.run",
-    description="Export prometheus metrics scraped from BigBlueButton servers using Selenium",
+    description="Export Prometheus metrics scraped from BigBlueButton servers using Selenium",
     long_description=long_description,
     long_description_content_type="text/markdown",
     url="https://gitlab.com/infra.run/public/bbb-selenium-exporter",
