@@ -12,6 +12,13 @@ setuptools.setup(
     long_description=long_description,
     long_description_content_type="text/markdown",
     url="https://gitlab.com/infra.run/public/bbb-selenium-exporter",
+    install_requires=[
+        "bigbluebutton_api_python",
+        "pillow",
+        "selenium",
+        "prometheus-client",
+        "mpipe",
+    ],
     packages=setuptools.find_packages(),
     package_data={"": ["assets/*.pdf"]},
     include_package_data=True,

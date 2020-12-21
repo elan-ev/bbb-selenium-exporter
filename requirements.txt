@@ -1,5 +1,0 @@
-bigbluebutton_api_python
-pillow
-selenium
-prometheus-client
-mpipe
