@@ -4,6 +4,6 @@ pkgs.mkShell {
   buildInputs = with pkgs; [
     chromedriver
 
-    (python3.withPackages (p: [p.pip p.pylint]))
+    (python3.withPackages (p: [p.pip p.pylint p.twine]))
   ];
 }
