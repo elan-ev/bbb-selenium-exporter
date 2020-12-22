@@ -1,28 +1,21 @@
 #!/usr/bin/env python3
 
-import sys, subprocess, time, logging, argparse, uuid
-import pkg_resources
-from PIL import Image
-#from bbbutils.roomutil import RoomUtil
-from selenium import webdriver
-from selenium.webdriver.common.by import By
-from selenium.webdriver.common.action_chains import ActionChains
-from selenium.webdriver.support import expected_conditions
-from selenium.webdriver.support.wait import WebDriverWait
-from selenium.webdriver.common.keys import Keys
-from selenium.webdriver.common.desired_capabilities import DesiredCapabilities
-from selenium.webdriver.support import expected_conditions as EC
-from selenium.webdriver.support.select import Select
-from collections import defaultdict
-from http.server import BaseHTTPRequestHandler, HTTPServer
-from urllib.parse import parse_qs, urlparse
-from prometheus_client import (
-    CollectorRegistry, Gauge, generate_latest, CONTENT_TYPE_LATEST
-)
+import logging
+import time
+import uuid
 from contextlib import closing, contextmanager
 from tempfile import NamedTemporaryFile
 from collections import namedtuple
+
+import pkg_resources
+from PIL import Image
 from bigbluebutton_api_python import BigBlueButton
+from prometheus_client import CollectorRegistry, Gauge
+from selenium import webdriver
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support import expected_conditions
+from selenium.webdriver.support.select import Select
+from selenium.webdriver.support.wait import WebDriverWait
 
 
 SELENIUM_TIMEOUT = 20
@@ -35,21 +28,13 @@ class BBBError(Exception):
     pass
 
 
-def get_join_url(api, secret):
-    bbb = BigBlueButton(api, secret)
-    room = "selenium-exporter-{}".format(str(uuid.uuid4()))
-    password = str(uuid.uuid4())
-    bbb.create_meeting(room, params={'moderatorPW': password})
-    return bbb.get_join_meeting_url('selenium', room, password)
-
-
 def wrap_bbb_error(text):
-    def outer(f):
+    def outer(func):
         def inner(*args, **kwargs):
             try:
-                return f(*args, **kwargs)
-            except Exception as e:
-                raise BBBError(text) from e
+                return func(*args, **kwargs)
+            except Exception as exc:
+                raise BBBError(text) from exc
         return inner
     return outer
 
@@ -70,8 +55,15 @@ class BBBDriver():
         self.api = api
         self.secret = secret
 
+    def _get_join_url(self):
+        bbb = BigBlueButton(self.api, self.secret)
+        room = "selenium-exporter-{}".format(str(uuid.uuid4()))
+        password = str(uuid.uuid4())
+        bbb.create_meeting(room, params={'moderatorPW': password})
+        return bbb.get_join_meeting_url('selenium', room, password)
+
     def join(self):
-        bbb_url = get_join_url(self.api, self.secret)
+        bbb_url = self._get_join_url()
         # open first tab
         self.driver.get(bbb_url)
         ### open sencond tab to catch poll
@@ -80,110 +72,112 @@ class BBBDriver():
         with self.window(1):
             self.driver.get(bbb_url)
 
-    def wait_clickable(self, timeout, selector):
-        return WebDriverWait(self.driver, timeout).until(EC.element_to_be_clickable(selector))
+    def _wait_clickable(self, timeout, selector):
+        return WebDriverWait(self.driver, timeout).until(
+                expected_conditions.element_to_be_clickable(selector))
 
-    def wait_present(self, timeout, selector):
-        return WebDriverWait(self.driver, timeout).until(EC.presence_of_element_located(selector))
+    def _wait_present(self, timeout, selector):
+        return WebDriverWait(self.driver, timeout).until(
+                expected_conditions.presence_of_element_located(selector))
 
-    def wait_visible(self, timeout, selector):
-        return WebDriverWait(self.driver, timeout).until(EC.visibility_of_element_located(selector))
+    def _wait_visible(self, timeout, selector):
+        return WebDriverWait(self.driver, timeout).until(
+                expected_conditions.visibility_of_element_located(selector))
 
-    def wait_invisible(self, timeout, selector):
-        return WebDriverWait(self.driver, timeout).until(EC.invisibility_of_element_located(selector))
+    def _wait_invisible(self, timeout, selector):
+        return WebDriverWait(self.driver, timeout).until(
+                expected_conditions.invisibility_of_element_located(selector))
 
     @wrap_bbb_error('mic error')
     def enter_with_mic(self):
-        self.wait_clickable(SELENIUM_TIMEOUT, (By.CSS_SELECTOR, ".audioBtn--1H6rCK")).click()
+        self._wait_clickable(SELENIUM_TIMEOUT, (By.CSS_SELECTOR, ".audioBtn--1H6rCK")).click()
 
     @wrap_bbb_error('no echo test error')
     def wait_for_echo_test(self):
-        self.wait_clickable(SELENIUM_TIMEOUT, (By.CSS_SELECTOR, ".button--1JElwW")).click()
+        self._wait_clickable(SELENIUM_TIMEOUT, (By.CSS_SELECTOR, ".button--1JElwW")).click()
 
     @wrap_bbb_error('no audio error')
     def enter_without_audio(self):
-        self.wait_present(SELENIUM_TIMEOUT, (By.XPATH, "//button[@aria-label='Close Join audio modal']")).click()
+        self._wait_present(SELENIUM_TIMEOUT, (By.XPATH, "//button[@aria-label='Close Join audio modal']")).click()
 
     def enter_with_headphones(self):
         try:
-            self.wait_clickable(SELENIUM_TIMEOUT, (By.CSS_SELECTOR, ".icon-bbb-listen")).click()
-        except Exception as e:
-            raise BBBError('headphone error') from e
+            self._wait_clickable(SELENIUM_TIMEOUT, (By.CSS_SELECTOR, ".icon-bbb-listen")).click()
+        except Exception as exc:
+            raise BBBError('headphone error') from exc
 
     @wrap_bbb_error('overlay error')
     def wait_for_overlays_to_disappear(self):
-        self.wait_invisible(SHORT_TIMEOUT, (By.CSS_SELECTOR, ".icon-bbb-unmute"))
-        self.wait_invisible(SHORT_TIMEOUT, (By.CSS_SELECTOR, ".ReactModal__Overlay"))
+        self._wait_invisible(SHORT_TIMEOUT, (By.CSS_SELECTOR, ".icon-bbb-unmute"))
+        self._wait_invisible(SHORT_TIMEOUT, (By.CSS_SELECTOR, ".ReactModal__Overlay"))
 
     @wrap_bbb_error('presentation upload error')
     def upload_presentation(self): 
         pdf_path = pkg_resources.resource_filename(__name__, 'assets/red.pdf')
-        self.wait_clickable(SELENIUM_TIMEOUT, (By.CSS_SELECTOR, ".button--ZzeTUF")).click()
-        self.wait_visible(SELENIUM_TIMEOUT, (By.XPATH, "//span[text()='Upload a presentation']")).click()
-        self.wait_visible(SELENIUM_TIMEOUT, (By.XPATH, "//input[@type='file']")).send_keys(pdf_path)
-        self.wait_visible(SELENIUM_TIMEOUT, (By.XPATH, "//button[@aria-label='Upload ']")).click()
-        self.wait_invisible(SELENIUM_TIMEOUT, (By.XPATH, "//button[@aria-label='Upload ']"))
-        self.check_for_presentation()
+        self._wait_clickable(SELENIUM_TIMEOUT, (By.CSS_SELECTOR, ".button--ZzeTUF")).click()
+        self._wait_visible(SELENIUM_TIMEOUT, (By.XPATH, "//span[text()='Upload a presentation']")).click()
+        self._wait_visible(SELENIUM_TIMEOUT, (By.XPATH, "//input[@type='file']")).send_keys(pdf_path)
+        self._wait_visible(SELENIUM_TIMEOUT, (By.XPATH, "//button[@aria-label='Upload ']")).click()
+        self._wait_invisible(SELENIUM_TIMEOUT, (By.XPATH, "//button[@aria-label='Upload ']"))
+        self._check_for_presentation()
 
     @wrap_bbb_error('video start error')
     def switch_on_video(self):
-        self.wait_invisible(SELENIUM_TIMEOUT, (By.CSS_SELECTOR, ".icon-bbb-unmute"))
-        self.wait_invisible(SELENIUM_TIMEOUT, (By.CSS_SELECTOR, ".ReactModal__Overlay"))  # FIXME: duplicate of wait_for_overlays_to_disappear
-        self.wait_clickable(SELENIUM_TIMEOUT, (By.XPATH, "//button[@aria-label='Share webcam']")).click()
-        Select(self.wait_present(SELENIUM_TIMEOUT, (By.ID, "setQuality"))).select_by_value('medium')
-        self.wait_present(SELENIUM_TIMEOUT, (By.CSS_SELECTOR, ".primary--1IbqAO > .label--Z12LMR3:nth-child(1)")).click()
-        self.wait_present(SELENIUM_TIMEOUT, (By.CSS_SELECTOR, ".cursorGrab--Z2fB4yK"))
+        self._wait_clickable(SELENIUM_TIMEOUT, (By.XPATH, "//button[@aria-label='Share webcam']")).click()
+        Select(self._wait_present(SELENIUM_TIMEOUT, (By.ID, "setQuality"))).select_by_value('medium')
+        self._wait_present(SELENIUM_TIMEOUT, (By.CSS_SELECTOR, ".primary--1IbqAO > .label--Z12LMR3:nth-child(1)")).click()
+        self._wait_present(SELENIUM_TIMEOUT, (By.CSS_SELECTOR, ".cursorGrab--Z2fB4yK"))
 
     @wrap_bbb_error('chat send error')
     def send_chat_message(self):
-        self.wait_clickable(SELENIUM_TIMEOUT, (By.CSS_SELECTOR, ".input--2wilPX")).click()
-        self.wait_clickable(SELENIUM_TIMEOUT, (By.CSS_SELECTOR, ".input--2wilPX")).send_keys("hallo Chat\n")
-        chat = self.wait_present(SELENIUM_TIMEOUT, (By.CSS_SELECTOR, ".content--Z2nhld9"))
-        assert("hallo Chat" in chat.text)
+        self._wait_clickable(SELENIUM_TIMEOUT, (By.CSS_SELECTOR, ".input--2wilPX")).click()
+        self._wait_clickable(SELENIUM_TIMEOUT, (By.CSS_SELECTOR, ".input--2wilPX")).send_keys("hallo Chat\n")
+        chat = self._wait_present(SELENIUM_TIMEOUT, (By.CSS_SELECTOR, ".content--Z2nhld9"))
+        assert "hallo Chat" in chat.text
 
     @wrap_bbb_error('poll start error')
-    def start_poll(self): 
-        self.wait_clickable(SELENIUM_TIMEOUT, (By.CSS_SELECTOR, ".button--ZzeTUF")).click()
-        self.wait_visible(SELENIUM_TIMEOUT, (By.XPATH, "//span[text()='Start a poll']")).click()
-        self.wait_present(SELENIUM_TIMEOUT, (By.XPATH, "//button[@aria-label='Yes / No']")).click()
+    def start_poll(self):
+        self._wait_clickable(SELENIUM_TIMEOUT, (By.CSS_SELECTOR, ".button--ZzeTUF")).click()
+        self._wait_visible(SELENIUM_TIMEOUT, (By.XPATH, "//span[text()='Start a poll']")).click()
+        self._wait_present(SELENIUM_TIMEOUT, (By.XPATH, "//button[@aria-label='Yes / No']")).click()
 
     @wrap_bbb_error('pad enter error')
     def enter_pad(self):
-        self.wait_clickable(SELENIUM_TIMEOUT, (By.CSS_SELECTOR, ".listItem--Siv4F")).click()
-        self.wait_present(SELENIUM_TIMEOUT, (By.CSS_SELECTOR, ".note--1ESx6q"))
-        self.wait_present(SELENIUM_TIMEOUT, (By.CSS_SELECTOR, ".userlistPad--o5KDX"))
+        self._wait_clickable(SELENIUM_TIMEOUT, (By.CSS_SELECTOR, ".listItem--Siv4F")).click()
+        self._wait_present(SELENIUM_TIMEOUT, (By.CSS_SELECTOR, ".note--1ESx6q"))
+        self._wait_present(SELENIUM_TIMEOUT, (By.CSS_SELECTOR, ".userlistPad--o5KDX"))
 
-        for i in range(3):
-            seq = self.wait_present(SELENIUM_TIMEOUT, (By.TAG_NAME, "iframe"))
+        for _ in range(3):
+            self._wait_present(SELENIUM_TIMEOUT, (By.TAG_NAME, "iframe"))
             iframe = self.driver.find_elements_by_tag_name('iframe')[0]
             self.driver.switch_to.frame(iframe)
 
     @wrap_bbb_error('pad edit error')
     def edit_etherpad(self):
         self.enter_pad()
-        self.wait_present(SELENIUM_TIMEOUT, (By.CSS_SELECTOR, ".ace-line")).send_keys("hallo Pad\n")
+        self._wait_present(SELENIUM_TIMEOUT, (By.CSS_SELECTOR, ".ace-line")).send_keys("hallo Pad\n")
 
     @wrap_bbb_error('poll error')
     def check_for_poll(self):
-        self.wait_present(SHORT_TIMEOUT, (By.XPATH, "//button[@aria-label='Yes']")).click()
+        self._wait_present(SHORT_TIMEOUT, (By.XPATH, "//button[@aria-label='Yes']")).click()
 
-    def check_for_presentation(self):
-        return self.wait_screenshot_pixel(
+    def _check_for_presentation(self):
+        return self._wait_screenshot_pixel(
                 (By.CSS_SELECTOR, ".svgContainer--Z1z3wO0"),
                 lambda pixels, pres: pixels[pres.size['width'] / 2, pres.size['height'] / 2],
                 lambda pixel: pixel[0] > 200 and pixel[1] < 50 and pixel[2] < 50)
 
     def check_for_video(self):
-        return self.wait_screenshot_pixel(
+        return self._wait_screenshot_pixel(
                 (By.CSS_SELECTOR, ".cursorGrab--Z2fB4yK"),
                 lambda pixels, _: pixels[2, 20],
                 lambda pixel: pixel[0] < 50 and pixel[1] > 70 and pixel[2] < 50)
 
-    def wait_screenshot_pixel(self, selector, get_pixel, pixel_ok, max_tries=MAX_TRIES):
-        for i in range(max_tries):
+    def _wait_screenshot_pixel(self, selector, get_pixel, pixel_ok, max_tries=MAX_TRIES):
+        for _ in range(max_tries):
             time.sleep(1)
             try:
-                element = self.wait_present(1, selector)
+                element = self._wait_present(1, selector)
             except:
                 continue
             with NamedTemporaryFile(suffix='.png') as tmp:
@@ -197,14 +191,14 @@ class BBBDriver():
 
     @wrap_bbb_error('chat message not found')
     def check_for_chat_message(self):
-        chat = self.wait_present(SELENIUM_TIMEOUT, (By.CSS_SELECTOR, ".content--Z2nhld9"))
-        assert("hallo Chat" in chat.text)
+        chat = self._wait_present(SELENIUM_TIMEOUT, (By.CSS_SELECTOR, ".content--Z2nhld9"))
+        assert "hallo Chat" in chat.text
 
     @wrap_bbb_error('etherpad line not found')
     def check_for_etherpad(self):
         self.enter_pad()
-        pad = self.wait_present(SELENIUM_TIMEOUT, (By.CSS_SELECTOR, ".ace-line"))
-        assert("hallo Pad" in pad.text)
+        pad = self._wait_present(SELENIUM_TIMEOUT, (By.CSS_SELECTOR, ".ace-line"))
+        assert "hallo Pad" in pad.text
 
     @contextmanager
     def window(self, num):
@@ -222,15 +216,15 @@ Gauges = namedtuple('Gauges', ['success', 'duration'])
 
 
 def bbb_scenario(gauges):
-    def wrapper(f):
+    def wrapper(func):
         def inner(*args, **kwargs):
             with gauges.duration.time():
                 try:
-                    f(*args, **kwargs)
+                    func(*args, **kwargs)
                     gauges.success.set(True)
                     return True
-                except Exception as e:
-                    logging.error(e)
+                except Exception as exc:
+                    logging.error(exc)
                     return False
         return inner
     return wrapper

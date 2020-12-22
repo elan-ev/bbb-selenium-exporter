@@ -8,10 +8,10 @@ from argparse import ArgumentParser
 from collections import namedtuple
 from datetime import datetime
 from http.server import BaseHTTPRequestHandler, HTTPServer
-from mpipe import UnorderedStage, Pipeline
 from threading import Thread, Timer, Lock
 from urllib.parse import parse_qs, urlparse
 
+from mpipe import UnorderedStage, Pipeline
 from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 
 from .collect import collect
@@ -94,7 +94,7 @@ class ExecutionCache():
 
                 if target.host in removed_hosts:
                     try:
-                        del(self._results[target.host])
+                        del self._results[target.host]
                     except KeyError:
                         pass
 
@@ -140,8 +140,8 @@ def prepare_selenium_test(headless):
 
 
 def read_config(path):
-    with open(path, 'r') as f:
-        lines = f.readlines()
+    with open(path, 'r') as config_file:
+        lines = config_file.readlines()
 
     targets = dict()
     for linenum, line in enumerate(lines):
