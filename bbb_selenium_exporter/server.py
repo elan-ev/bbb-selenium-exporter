@@ -146,7 +146,7 @@ def read_config(path):
     targets = dict()
     for linenum, line in enumerate(lines):
         host, _, secret = line.strip().partition(' ')
-        if not secret:
+        if not secret or host.startswith('#'):
             continue
         if host in targets:
             print(f'duplicate host {host} configured in line {linenum+1}, ignoring')
