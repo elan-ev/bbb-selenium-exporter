@@ -64,13 +64,9 @@ class BBBDriver():
 
     def join(self):
         bbb_url = self._get_join_url()
-        # open first tab
         self.driver.get(bbb_url)
-        ### open sencond tab to catch poll
-        self.driver.execute_script("window.open('');")
-        time.sleep(2)
-        with self.window(1):
-            self.driver.get(bbb_url)
+        self.driver.execute_script(f'window.open("{bbb_url}");')
+        self.driver.switch_to.window(self.driver.window_handles[0])
 
     def _wait_clickable(self, timeout, selector):
         return WebDriverWait(self.driver, timeout).until(
