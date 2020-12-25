@@ -3,19 +3,20 @@
 import logging
 import time
 import uuid
-from contextlib import closing, contextmanager
+from contextlib import contextmanager
 from tempfile import NamedTemporaryFile
 from collections import namedtuple
 
 import pkg_resources
 from PIL import Image
-from bigbluebutton_api_python import BigBlueButton
 from prometheus_client import CollectorRegistry, Gauge
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions
 from selenium.webdriver.support.select import Select
 from selenium.webdriver.support.wait import WebDriverWait
+
+from .bbb import Meeting
 
 
 SELENIUM_TIMEOUT = 20
@@ -40,7 +41,7 @@ def wrap_bbb_error(text):
 
 
 class BBBDriver():
-    def __init__(self, api, secret, headless=True):
+    def __init__(self, join_url, headless=True):
         chrome_options = webdriver.chrome.options.Options()
         chrome_options.add_argument("--use-fake-ui-for-media-stream")
         chrome_options.add_argument("--use-fake-device-for-media-stream")
@@ -52,20 +53,11 @@ class BBBDriver():
         self.driver = webdriver.Chrome(options=chrome_options)
         self.driver.set_script_timeout(20)
         self.driver.set_page_load_timeout(20)
-        self.api = api
-        self.secret = secret
-
-    def _get_join_url(self):
-        bbb = BigBlueButton(self.api, self.secret)
-        room = "selenium-exporter-{}".format(str(uuid.uuid4()))
-        password = str(uuid.uuid4())
-        bbb.create_meeting(room, params={'moderatorPW': password})
-        return bbb.get_join_meeting_url('selenium', room, password)
+        self._join_url = join_url
 
     def join(self):
-        bbb_url = self._get_join_url()
-        self.driver.get(bbb_url)
-        self.driver.execute_script(f'window.open("{bbb_url}");')
+        self.driver.get(self._join_url)
+        self.driver.execute_script(f'window.open("{self._join_url}");')
         self.driver.switch_to.window(self.driver.window_handles[0])
 
     def _wait_clickable(self, timeout, selector):
@@ -204,7 +196,10 @@ class BBBDriver():
         finally:
             self.driver.switch_to.window(self.driver.window_handles[0])
 
-    def close(self):
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *args):
         self.driver.quit()
 
 
@@ -224,10 +219,6 @@ def bbb_scenario(gauges):
                     return False
         return inner
     return wrapper
-
-
-def bbb_connection(hostname, secret, headless=True):
-    return BBBDriver(f'https://{hostname}/bigbluebutton/', secret, headless=headless)
 
 
 def collect(hostname, secret, headless=True):
@@ -287,18 +278,20 @@ def collect(hostname, secret, headless=True):
             conn.check_for_etherpad()
 
 
-    with closing(bbb_connection(hostname, secret, headless=headless)) as conn:
-        if not connect_server(conn):
-            return registry
-        
-        if not echo_test(conn):
-            conn.enter_without_audio()
+    try:
+        with Meeting(hostname, secret) as room, BBBDriver(room.join_url('selenium'), headless=headless) as conn:
+            if not connect_server(conn):
+                return
+            
+            if not echo_test(conn):
+                conn.enter_without_audio()
 
-        join_headphone(conn)
-        start_cam(conn)
-        upload_pres(conn)
-        chat_test(conn)
-        poll_test(conn)
-        etherpad_test(conn)
+            join_headphone(conn)
+            start_cam(conn)
+            upload_pres(conn)
+            chat_test(conn)
+            poll_test(conn)
+            etherpad_test(conn)
 
-    return registry
+    finally:
+        return registry
