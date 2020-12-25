@@ -40,14 +40,14 @@ class Scheduler():
     def remove(self, target):
         try:
             self.targets[target].cancel()
-            del(self.targets[target])
+            del self.targets[target]
         except KeyError:
             pass
 
     def cancel_all(self):
-        # TODO make safe against SIGHUP
-        for timer in self.targets.values():
+        for target, timer in self.targets.items():
             timer.cancel()
+            del self.targets[target]
 
     @staticmethod
     def factory(interval):
