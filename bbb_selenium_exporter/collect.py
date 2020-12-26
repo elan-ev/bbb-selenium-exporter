@@ -44,8 +44,6 @@ class BBBDriver():
         chrome_options.add_argument("--use-fake-ui-for-media-stream")
         chrome_options.add_argument("--use-fake-device-for-media-stream")
         chrome_options.add_argument("--use-fake-device-for-audio-stream")
-        chrome_options.add_argument("--disable-dev-shm-usage")
-        chrome_options.add_argument("--no-sandbox")
         if headless:
             chrome_options.add_argument("--headless")
         self.driver = webdriver.Chrome(options=chrome_options)
