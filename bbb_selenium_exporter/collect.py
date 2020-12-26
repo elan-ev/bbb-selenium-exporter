@@ -17,6 +17,9 @@ from selenium.webdriver.support.wait import WebDriverWait
 from .bbb import Meeting
 
 
+log = logging.getLogger(__name__)
+
+
 SELENIUM_TIMEOUT = 20
 SHORT_TIMEOUT = 10
 NEXT_TRY_TIMEOUT = 5
@@ -211,7 +214,7 @@ def bbb_scenario(gauges):
                     gauges.success.set(True)
                     return True
                 except Exception as exc:
-                    logging.error(exc)
+                    log.debug(exc, exc_info=True)
                     return False
         return inner
     return wrapper
@@ -289,5 +292,7 @@ def collect(hostname, secret, headless=True):
             poll_test(conn)
             etherpad_test(conn)
 
+    except Exception as exc:
+        log.exception(exc)
     finally:
         return registry
