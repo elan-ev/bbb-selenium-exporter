@@ -18,6 +18,8 @@ setuptools.setup(
         "prometheus-client",
         "requests",
         "selenium",
+        "trio",
+        "idna==2.10",
     ],
     packages=setuptools.find_packages(),
     package_data={"": ["assets/*.pdf"]},
