@@ -1,7 +1,7 @@
 version: '3.3'
 services:
   bbb-streamer:
-    image: quay.io/elan-ev/bbb-selenium-exporter
+    image: quay.io/elan-ev/bbb-selenium-exporter:no-sandbox
     container_name: bbb-selenium-exporter
     restart: always
     ports:
