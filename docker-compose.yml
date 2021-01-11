@@ -1,0 +1,10 @@
+version: '3.3'
+services:
+  bbb-streamer:
+    image: quay.io/elan-ev/bbb-selenium-exporter
+    container_name: bbb-selenium-exporter
+    restart: always
+    ports:
+      - 127.0.0.1:9123:9123
+    volumes:
+      - ./targets:/etc/bbb-selenium-exporter/targets
