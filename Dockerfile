@@ -23,4 +23,4 @@ RUN useradd --create-home selenium
 USER selenium
 
 EXPOSE 9123
-CMD bbb-selenium-exporter
+CMD ["bbb-selenium-exporter", "--bind", "0.0.0.0:9123"]
