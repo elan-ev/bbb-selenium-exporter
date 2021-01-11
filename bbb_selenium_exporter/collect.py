@@ -49,6 +49,7 @@ class BBBDriver():
         chrome_options.add_argument("--use-fake-device-for-audio-stream")
         if headless:
             chrome_options.add_argument("--headless")
+        chrome_options.add_argument("--no-sandbox")
         self.driver = webdriver.Chrome(options=chrome_options)
         self.driver.set_script_timeout(20)
         self.driver.set_page_load_timeout(20)
