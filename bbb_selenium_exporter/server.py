@@ -105,11 +105,32 @@ class ExecutionCache():
 
 
 class CacheHandler(BaseHTTPRequestHandler):
+
+    HOME = b'''
+    <!DOCTYPE html>
+    <html lang=en>
+    <head>
+    <title>bbb-selenium-exporter</title>
+    </head>
+    <body>
+    <h1>bbb-selenium-exporter</h1>
+    Go to <a href="/metrics?target="><code>/metrics?target=HOST</a>
+    to access the metrics.
+    </body>
+    </html>
+    '''
+
     @staticmethod
     def factory(cache):
         return type('CacheHandler', (CacheHandler, object), {"cache": cache})
 
     def do_GET(self):
+        if self.path == '/':
+            self.send_response(200)
+            self.send_header('Content-Type', 'text/html; charset=utf-8')
+            self.end_headers()
+            self.wfile.write(self.HOME)
+            return
         if not self.path.startswith('/metrics'):
             self.send_error(404)
             return
