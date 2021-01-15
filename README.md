@@ -13,8 +13,8 @@ Installation
 To run the exporter, you need:
 
 - Python 3
-- Google Chrome
-- Chromedriver
+- [Google Chrome](https://www.google.com/chrome/)
+- A matching [ChromeDriver](https://chromedriver.chromium.org/downloads)
 
 Use the `setup.py` to build and install the bbb-selenium-exporter:
 
