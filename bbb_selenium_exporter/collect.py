@@ -136,7 +136,7 @@ class BBBDriver():
 
         for _ in range(3):
             self._wait_present(SELENIUM_TIMEOUT, (By.TAG_NAME, "iframe"))
-            iframe = self.driver.find_elements_by_tag_name('iframe')[0]
+            iframe = self.driver.find_element(by=By.TAG_NAME, value='iframe')
             self.driver.switch_to.frame(iframe)
 
     @wrap_bbb_error('pad edit error')
