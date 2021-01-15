@@ -56,4 +56,7 @@ class Meeting():
             'password': self._moderator_pw,
             'fullName': username,
             'redirect': 'true',
+            'userdata-bbb_auto_swap_layout': 'false',
+            'userdata-bbb_auto_share_webcam': 'false',
+            'userdata-bbb_show_public_chat_on_login': 'true'
         })
