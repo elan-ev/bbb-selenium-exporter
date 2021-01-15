@@ -187,6 +187,7 @@ def main():
     cache = ExecutionCache(prepare_selenium_test(not args.gui), args.jobs, Scheduler.factory(args.interval))
 
     bindhost, _, bindport = args.bind.rpartition(":")
+    print(f'Start listening on http://{bindhost}:{bindport}')
     Thread(target=lambda: HTTPServer((bindhost, int(bindport)), CacheHandler.factory(cache)).serve_forever(), daemon=True).start()
 
     def reload_targets(*_):
